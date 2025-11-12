@@ -1,0 +1,123 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pv-generator-script
+  namespace: rhoso1
+data:
+  generate-pvs.sh: |
+    #!/bin/bash
+    set -ex
+
+    PV_NUM=${PV_NUM:-20}
+    STORAGE_CAPACITY=${STORAGE_CAPACITY:-10}
+    STORAGE_CLASS=${STORAGE_CLASS:-local-storage}
+    NAMESPACE=${NAMESPACE:-rhoso1}
+
+    # Get worker nodes
+    NODE_NAMES=$(oc get node -o name -l node-role.kubernetes.io/worker | sed -e 's|node/||' | head -c-1 | tr '\n' ' ')
+    if [ -z "$NODE_NAMES" ]; then
+        echo "Unable to determine node name with 'oc' command."
+        exit 1
+    fi
+
+    # Generate PVs for each node
+    for node in $NODE_NAMES; do
+      for i in $(seq -w $PV_NUM); do
+        cat <<EOF | oc apply -f -
+    ---
+    kind: PersistentVolume
+    apiVersion: v1
+    metadata:
+      name: "${STORAGE_CLASS}${i}-${node}"
+      annotations:
+        pv.kubernetes.io/provisioned-by: gitops-deployment
+      labels:
+        provisioned-by: gitops-deployment
+    spec:
+      storageClassName: ${STORAGE_CLASS}
+      capacity:
+        storage: ${STORAGE_CAPACITY}Gi
+      accessModes:
+        - ReadWriteOnce
+        - ReadWriteMany
+        - ReadOnlyMany
+      persistentVolumeReclaimPolicy: Delete
+      local:
+        path: "/mnt/openstack/pv${i}"
+        type: DirectoryOrCreate
+      volumeMode: Filesystem
+      nodeAffinity:
+        required:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: [${node}]
+    EOF
+      done
+    done
+
+    # Create ansible-ee-logs PVC
+    cat <<EOF | oc apply -f -
+    ---
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ansible-ee-logs
+      namespace: ${NAMESPACE}
+      annotations:
+        pv.kubernetes.io/provisioned-by: gitops-deployment
+    spec:
+      resources:
+        requests:
+          storage: ${STORAGE_CAPACITY}Gi
+      accessModes:
+        - ReadWriteOnce
+        - ReadWriteMany
+        - ReadOnlyMany
+      storageClassName: ${STORAGE_CLASS}
+    EOF
+
+    echo "PVs and PVC created successfully"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pv-generator
+  namespace: rhoso1
+  annotations:
+    # Removed PreSync hook - using sync-wave instead
+    # PreSync runs before all resources, so ServiceAccount doesn't exist yet
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  template:
+    spec:
+      serviceAccountName: pv-generator
+      containers:
+      - name: generator
+        image: quay.io/openshift/origin-cli:latest
+        command:
+        - /bin/bash
+        - /scripts/generate-pvs.sh
+        env:
+        - name: PV_NUM
+          value: "20"
+        - name: STORAGE_CAPACITY
+          value: "10"
+        - name: STORAGE_CLASS
+          value: "local-storage"
+        - name: NAMESPACE
+          value: "rhoso1"
+        volumeMounts:
+        - name: script
+          mountPath: /scripts
+      volumes:
+      - name: script
+        configMap:
+          name: pv-generator-script
+          defaultMode: 0755
+      restartPolicy: OnFailure
+  backoffLimit: 3
+# Note: ServiceAccount pv-generator is defined in serviceaccounts.yaml
+# Note: ClusterRole and ClusterRoleBinding for pv-generator are in argocd/jobs-rbac.yaml

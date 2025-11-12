@@ -1,0 +1,177 @@
+---
+apiVersion: core.openstack.org/v1beta1
+kind: OpenStackControlPlane
+metadata:
+  name: openstack-galera
+  namespace: rhoso1
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  secret: osp-secret
+  storageClass: local-storage
+
+  galera:
+    enabled: true
+    templates:
+      openstack:
+        replicas: 1
+        secret: osp-secret
+        storageRequest: 5G
+      openstack-cell1:
+        replicas: 1
+        secret: osp-secret
+        storageRequest: 5G
+
+  rabbitmq:
+    templates:
+      rabbitmq:
+        replicas: 1
+      rabbitmq-cell1:
+        replicas: 1
+
+  memcached:
+    templates:
+      memcached:
+        replicas: 1
+
+  keystone:
+    apiOverride:
+      route: {}
+    template:
+      databaseInstance: openstack
+      secret: osp-secret
+      replicas: 1
+
+  placement:
+    apiOverride:
+      route: {}
+    template:
+      databaseInstance: openstack
+      secret: osp-secret
+      replicas: 1
+
+  glance:
+    apiOverrides:
+      default:
+        route: {}
+    template:
+      databaseInstance: openstack
+      customServiceConfig: |
+        [DEFAULT]
+        enabled_backends = default_backend:swift
+        [glance_store]
+        default_backend = default_backend
+        [default_backend]
+        swift_store_create_container_on_put = True
+        swift_store_auth_version = 3
+        swift_store_auth_address = {{ .KeystoneInternalURL }}
+        swift_store_endpoint_type = internalURL
+        swift_store_user = service:glance
+        swift_store_key = {{ .ServicePassword }}
+      glanceAPIs:
+        default:
+          replicas: 1
+      storage:
+        storageRequest: 10G
+
+  cinder:
+    apiOverride:
+      route: {}
+    template:
+      cinderAPI:
+        replicas: 1
+      cinderScheduler:
+        replicas: 1
+      cinderBackup:
+        replicas: 0
+      cinderVolumes: {}
+      databaseInstance: openstack
+      secret: osp-secret
+
+  ovn:
+    template:
+      ovnDBCluster:
+        ovndbcluster-nb:
+          dbType: NB
+          storageRequest: 10G
+          replicas: 1
+        ovndbcluster-sb:
+          dbType: SB
+          storageRequest: 10G
+          replicas: 1
+      ovnNorthd:
+        replicas: 1
+
+  neutron:
+    apiOverride:
+      route: {}
+    template:
+      databaseInstance: openstack
+      secret: osp-secret
+      replicas: 1
+
+  nova:
+    apiOverride:
+      route: {}
+    template:
+      secret: osp-secret
+      apiServiceTemplate:
+        replicas: 1
+        customServiceConfig: |
+          [pci]
+          alias = { "vendor_id":"10de", "product_id":"27b8", "device_type":"type-PCI", "name":"nvidia", "numa_policy":"preferred" }
+      metadataServiceTemplate:
+        replicas: 1
+      schedulerServiceTemplate:
+        replicas: 1
+      cellTemplates:
+        cell0:
+          cellDatabaseAccount: nova-cell0
+          cellDatabaseInstance: openstack
+          cellMessageBusInstance: rabbitmq
+          conductorServiceTemplate:
+            replicas: 1
+          hasAPIAccess: true
+        cell1:
+          cellDatabaseAccount: nova-cell1
+          cellDatabaseInstance: openstack-cell1
+          cellMessageBusInstance: rabbitmq-cell1
+          conductorServiceTemplate:
+            replicas: 1
+          hasAPIAccess: true
+
+  horizon:
+    apiOverride:
+      route: {}
+    template:
+      replicas: 1
+      secret: osp-secret
+    enabled: true
+
+  # Disabled services
+  barbican:
+    enabled: false
+  ceilometer:
+    enabled: false
+  designate:
+    enabled: false
+  heat:
+    enabled: false
+  ironic:
+    enabled: false
+  manila:
+    enabled: false
+  octavia:
+    enabled: false
+  swift:
+    enabled: true
+    template:
+      swiftRing:
+        ringReplicas: 1
+      swiftStorage:
+        replicas: 1
+        storageRequest: 10G
+      swiftProxy:
+        replicas: 1
+  telemetry:
+    enabled: false

@@ -1,0 +1,57 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rhoso-nvidia-l4-passthrough
+  namespace: gitops-rhoso1  # Deploy to the dedicated ArgoCD namespace
+  annotations:
+    argocd.argoproj.io/manifest-generate-paths: .
+    argocd.argoproj.io/refresh-timeout: "60"  # Increase timeout to 60 seconds
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/rhos-vaf/architecture.git
+    targetRevision: OSPRH-21480
+    path: va/nvidia-l4-passthrough/overlays/rhoso1
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: rhoso1
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Ignore differences that are expected to change
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    - group: core.openstack.org
+      kind: OpenStackControlPlane
+      jqPathExpressions:
+        - .status
+    - group: ""
+      kind: Secret
+      jsonPointers:
+        - /data
+    - group: batch
+      kind: Job
+      jsonPointers:
+        - /status

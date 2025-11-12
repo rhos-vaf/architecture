@@ -1,0 +1,12 @@
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Rendered manifests
+rendered-*.yaml
+
+# IDE files
+.idea/
+.vscode/
+*.iml

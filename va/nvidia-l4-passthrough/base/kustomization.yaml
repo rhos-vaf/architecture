@@ -1,0 +1,18 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: rhoso1
+
+resources:
+  # namespace.yaml removed - ArgoCD in namespaced mode cannot manage cluster-scoped Namespace resources
+  # storage.yaml, storage-prep-job.yaml, pv-generator.yaml removed - storage handled separately
+  # This deployment only handles: make openstack_deploy (not input or crc_storage)
+  - secrets.yaml
+  - netconfig.yaml
+  - openstackcontrolplane.yaml
+
+labels:
+  - pairs:
+      deployment: nvidia-l4-passthrough
+      gitops: argocd

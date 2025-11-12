@@ -1,0 +1,21 @@
+---
+apiVersion: network.openstack.org/v1beta1
+kind: NetConfig
+metadata:
+  name: netconfig
+  namespace: rhoso1
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  networks:
+  - name: CtlPlane
+    dnsDomain: ctlplane.example.com
+    subnets:
+    - name: subnet1
+      allocationRanges:
+      - start: 192.168.122.100
+        end: 192.168.122.120
+      - start: 192.168.122.150
+        end: 192.168.122.180
+      cidr: 192.168.122.0/24
+      gateway: 192.168.122.1

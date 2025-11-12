@@ -1,0 +1,26 @@
+---
+# Cluster-scoped resources that must be applied separately
+# ArgoCD in namespaced mode cannot manage these resources
+#
+# Apply with: oc apply -f argocd/cluster-resources.yaml
+
+# Namespace for RHOSO deployment
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rhoso1
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    security.openshift.io/scc.podSecurityLabelSync: "false"
+    argocd.argoproj.io/managed-by: gitops-rhoso1
+
+# Note: StorageClass "local-storage" is not included here as it already exists
+# If needed, create it with:
+# ---
+# kind: StorageClass
+# apiVersion: storage.k8s.io/v1
+# metadata:
+#   name: local-storage
+# provisioner: kubernetes.io/no-provisioner
+# volumeBindingMode: WaitForFirstConsumer
+# allowVolumeExpansion: true

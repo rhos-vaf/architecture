@@ -1,0 +1,152 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    argocd.argoproj.io/managed-by: openshift-gitops
+---
+apiVersion: argoproj.io/v1beta1
+kind: ArgoCD
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  # Server configuration
+  server:
+    replicas: 1
+    route:
+      enabled: true
+      tls:
+        termination: reencrypt
+        insecureEdgeTerminationPolicy: Redirect
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 125m
+        memory: 128Mi
+
+  # Application controller
+  controller:
+    replicas: 1
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+      requests:
+        cpu: 250m
+        memory: 1Gi
+    sharding:
+      enabled: false
+
+  # Repo server
+  repo:
+    replicas: 1
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+  # Redis
+  redis:
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 250m
+        memory: 128Mi
+
+  # Dex (SSO) - disabled by default
+  dex:
+    openShiftOAuth: true
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 250m
+        memory: 128Mi
+
+  # HA configuration (disabled for single-node/CRC)
+  ha:
+    enabled: false
+
+  # RBAC configuration
+  rbac:
+    defaultPolicy: 'role:readonly'
+    policy: |
+      g, system:cluster-admins, role:admin
+      g, cluster-admins, role:admin
+    scopes: '[groups]'
+
+  # Resource customizations
+  resourceCustomizations: |
+    argoproj.io/Application:
+      health.lua: |
+        hs = {}
+        hs.status = "Progressing"
+        hs.message = ""
+        if obj.status ~= nil then
+          if obj.status.health ~= nil then
+            hs.status = obj.status.health.status
+            if obj.status.health.message ~= nil then
+              hs.message = obj.status.health.message
+            end
+          end
+        end
+        return hs
+
+  # Sync options
+  resourceExclusions: |
+    - apiGroups:
+      - tekton.dev
+      clusters:
+      - '*'
+      kinds:
+      - TaskRun
+      - PipelineRun
+
+  # Application controller settings
+  applicationSet:
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+  # Notifications controller (optional)
+  notifications:
+    enabled: false
+
+  # Repository credentials (if needed)
+  # repositoryCredentials: |
+  #   - url: https://github.com/your-org
+  #     type: git
+  #     passwordSecret:
+  #       name: git-secret
+  #       key: password
+  #     usernameSecret:
+  #       name: git-secret
+  #       key: username
+
+  # Initial repositories (optional)
+  # initialRepositories: |
+  #   - name: your-repo
+  #     url: https://github.com/your-org/your-repo.git
+
+  # Status badge configuration
+  statusBadgeEnabled: true
+
+  # Monitoring
+  prometheus:
+    enabled: true
+    route:
+      enabled: false

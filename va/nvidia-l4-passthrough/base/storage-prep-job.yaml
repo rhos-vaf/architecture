@@ -1,0 +1,59 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: storage-prep
+  namespace: rhoso1
+  annotations:
+    # Removed PreSync hook - using sync-wave instead
+    # PreSync runs before all resources, so ServiceAccount doesn't exist yet
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  template:
+    metadata:
+      labels:
+        install-yamls.crc.storage: "true"
+    spec:
+      serviceAccountName: pv-generator
+      hostNetwork: true
+      hostPID: true
+      containers:
+      - name: storage-setup
+        image: quay.io/openstack-k8s-operators/bash:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          #!/bin/bash
+          set -ex
+
+          PV_NUM=${PV_NUM:-20}
+
+          # Create storage directories on the host
+          for i in $(seq $PV_NUM); do
+            mkdir -p "/mnt/openstack/pv${i}"
+            chmod 777 "/mnt/openstack/pv${i}"
+          done
+
+          echo "Storage directories created successfully"
+        env:
+        - name: PV_NUM
+          value: "20"
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        volumeMounts:
+        - name: host-root
+          mountPath: /mnt
+          mountPropagation: Bidirectional
+      volumes:
+      - name: host-root
+        hostPath:
+          path: /mnt
+          type: Directory
+      restartPolicy: OnFailure
+      tolerations:
+      - operator: Exists
+      nodeSelector:
+        node-role.kubernetes.io/worker: ""
+  backoffLimit: 3
