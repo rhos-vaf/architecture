@@ -6,13 +6,3 @@ namespace: rhoso1
 
 resources:
   - ../../base
-
-# You can add patches here if needed for environment-specific customizations
-# patches:
-#   - target:
-#       kind: OpenStackControlPlane
-#       name: openstack-galera
-#     patch: |-
-#       - op: replace
-#         path: /spec/nova/template/apiServiceTemplate/replicas
-#         value: 3
