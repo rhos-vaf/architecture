@@ -3,7 +3,6 @@ apiVersion: core.openstack.org/v1beta1
 kind: OpenStackControlPlane
 metadata:
   name: openstack-galera
-  namespace: rhoso2
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
